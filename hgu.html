@@ -3,191 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ Non-Stop Continuous Barcode Scanner</title>
-    
-    <!-- Fast QR/Barcode library CDN -->
+    <title>⚡ Live Status Barcode Scanner</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-            background-color: #0f172a; /* Dark theme jo premium lagta hai */
-            color: #f8fafc;
-            text-align: center;
-            padding: 20px;
+            background-color: #0f172a; color: #f8fafc; text-align: center; padding: 20px;
         }
         .container {
-            max-width: 500px;
-            margin: 0 auto;
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            max-width: 500px; margin: 0 auto; background: #1e293b; padding: 20px; border-radius: 16px;
         }
-        h2 {
-            color: #38bdf8;
-            margin-bottom: 5px;
+        .tab-container { display: flex; background: #0f172a; padding: 5px; border-radius: 10px; margin-bottom: 20px; }
+        .tab-btn {
+            flex: 1; padding: 12px; border: none; border-radius: 8px; background: transparent;
+            color: #64748b; font-size: 1rem; font-weight: bold; cursor: pointer;
         }
-        p {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            margin-bottom: 20px;
+        .mode-in .tab-btn.active { background: #38bdf8; color: #0f172a; }
+        .mode-out .tab-btn.active { background: #f97316; color: #ffffff; }
+        
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #0f172a; margin-bottom: 15px; }
+        
+        /* 🔔 LIVE STATUS POPUP BANNER */
+        .status-banner {
+            padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; font-size: 0.95rem; display: none;
         }
-        #reader {
-            width: 100%;
-            border: 2px dashed #38bdf8;
-            border-radius: 12px;
-            overflow: hidden;
-            background: #0f172a;
-        }
-        /* Live feed box jahan scanned results flash honge */
+        .status-success { background-color: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
+        .status-warn { background-color: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+        .status-error { background-color: rgba(248, 113, 113, 0.2); color: #f87171; border: 1px solid #f87171; }
+
         .log-box {
-            margin-top: 20px;
-            background: #0f172a;
-            border-radius: 8px;
-            padding: 10px;
-            max-height: 150px;
-            overflow-y: auto;
-            text-align: left;
-            font-family: monospace;
-            font-size: 0.85rem;
+            background: #0f172a; border-radius: 8px; padding: 10px; max-height: 180px; overflow-y: auto; text-align: left; font-family: monospace;
         }
-        .log-entry {
-            padding: 6px 10px;
-            border-bottom: 1px solid #1e293b;
-            color: #4ade80;
-        }
-        .log-entry.sending {
-            color: #38bdf8;
-        }
+        .log-entry { padding: 6px 10px; border-bottom: 1px solid #1e293b; font-size: 0.85rem; }
     </style>
 </head>
-<body>
+<body class="mode-in" id="mainBody">
 
 <div class="container">
-    <h2>⚡ Non-Stop Fast Scanner</h2>
-    <p>Camera chalu rahega, bas ek ke baad ek barcode samne laate jao</p>
-    
-    <!-- Non-Stop Camera Window -->
+    <div class="tab-container">
+        <button class="tab-btn active" id="btnIn" onclick="switchMode('IN')">📥 IN MODE</button>
+        <button class="tab-btn" id="btnOut" onclick="switchMode('OUT')">📤 OUT MODE</button>
+    </div>
+
+    <!-- 🔔 Live Server Response Banner -->
+    <div id="statusBanner" class="status-banner">Scanning...</div>
+
     <div id="reader"></div>
     
-    <!-- Live Scanned Items History -->
     <div class="log-box" id="logBox">
-        <div style="color: #64748b; text-align:center; padding: 10px;">Scanned items will appear here instantly...</div>
+        <div style="color: #64748b; text-align:center; padding: 10px;">History will appear here...</div>
     </div>
 </div>
 
 <script>
+    // ⚠️ APNI DEPLOYED URL YAHA PASTE KAREIN
     const scriptUrl = "https://script.google.com/macros/s/AKfycbxIjzy8BFpHRsoBz4vKnResTi5l35CLk4HIKocLkhVNh1tWxoXSMMbbZFxpfALYJ7ce/exec";
 
-    // Ek hi barcode baar-baar lagatar duplicate scan na ho, isliye memory registry
-    const scannedCache = new Map();
-    const COOLDOWN_TIME = 3000; // 3 seconds tak same barcode dobara scan nahi hoga (Baki naye codes instant honge)
+    let currentMode = "IN";
+    let isProcessing = false;
 
-    // Fast Beep Sound function
-    function playBeep() {
+    function switchMode(mode) {
+        currentMode = mode;
+        document.getElementById("mainBody").className = mode === "IN" ? "mode-in" : "mode-out";
+        document.getElementById("btnIn").classList.toggle("active", mode === "IN");
+        document.getElementById("btnOut").classList.toggle("active", mode === "OUT");
+    }
+
+    function showStatus(text, type) {
+        const banner = document.getElementById("statusBanner");
+        banner.innerText = text;
+        banner.className = "status-banner " + (type === "success" ? "status-success" : type === "warn" ? "status-warn" : "status-error");
+        banner.style.display = "block";
+    }
+
+    function playBeep(freq) {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(1000, ctx.currentTime); // High pitch for instant feel
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
             osc.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.08); // Short beep (80ms)
+            osc.start(); osc.stop(ctx.currentTime + 0.15);
         } catch (e) {}
     }
 
-    const html5QrCode = new Html5Qrcode("reader");
-    
-    const config = { 
-        fps: 30, // Max speed frames per second
-        qrbox: (w, h) => ({ width: w * 0.9, height: h * 0.4 }), // Wide horizontal area for barcodes
-        formatsToSupport: [ 
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.CODE_128
-        ]
-    };
+    const qrCodeSuccessCallback = (decodedText) => {
+        if (isProcessing) return; // Ek baar me ek hi scan process hoga
+        isProcessing = true;
 
-    // TURANT SCAN SUCCESS LOGIC (No Stop!)
-    const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-        const currentTime = Date.now();
-        
-        // Agar yeh code abhi-abhi scan hua hai, toh ignore karo (Duplicate check)
-        if (scannedCache.has(decodedText) && (currentTime - scannedCache.get(decodedText) < COOLDOWN_TIME)) {
-            return; 
-        }
+        showStatus("Checking Sheet Status...", "warn");
 
-        // Naya barcode milte hi memory me lock karo timestamp ke sath
-        scannedCache.set(decodedText, currentTime);
-
-        // Instant Audio & Haptic Feedback
-        playBeep();
-        if (navigator.vibrate) navigator.vibrate(70); 
-
-        // Screen par bina time waste kiye log dikhao
-        addLogToScreen(decodedText);
-
-        // Background me chupke se data bhej do (Camera chalu rahega!)
-        sendDataInBackground(decodedText);
-    };
-
-    const qrCodeErrorCallback = (err) => { /* Fast scanning engine, ignore errors */ };
-
-    // BACKGROUND DATA SEND (Bina loop roke)
-    function sendDataInBackground(barcodeData) {
-        const payload = {
-            barcode: barcodeData,
-            timestamp: new Date().toLocaleString()
-        };
-
-        // Network call parallel chalega, script block nahi hogi
+        // Google Sheet ko data bhejna aur live response lena
         fetch(scriptUrl, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ barcode: decodedText, type: currentMode })
         })
-        .then(() => {
-            console.log(`Sent: ${barcodeData}`);
+        .then(res => res.json())
+        .then(response => {
+            if (response.status === "success") {
+                if (response.message.includes("Already Scanned")) {
+                    // ⚠️ Agar 4 din purana ya pehle se IN tha
+                    showStatus(`⚠️ ${decodedText}: Already IN! (Overwritten)`, "warn");
+                    playBeep(400); // Heavy alert sound
+                    addLogToScreen(`⚠️ Already IN (Updated): ${decodedText}`, "#f59e0b");
+                } else {
+                    // Fresh Entry
+                    showStatus(`✅ ${decodedText}: Success!`, "success");
+                    playBeep(1000); 
+                    addLogToScreen(`✅ ${currentMode}: ${decodedText}`, currentMode === "IN" ? "#4ade80" : "#f97316");
+                }
+            } else {
+                // Rejected or Not in list
+                showStatus(`❌ ${response.message}`, "error");
+                playBeep(250); 
+                addLogToScreen(`❌ Failed: ${response.message}`, "#f87171");
+            }
+            setTimeout(() => { isProcessing = false; }, 2000); // 2 Seconds ka delay taaki camera turant wapas lock na ho
         })
-        .catch((error) => {
-            console.error("Failed to send:", error);
+        .catch(err => {
+            showStatus("❌ Network Error!", "error");
+            console.error(err);
+            isProcessing = false;
         });
-    }
+    };
 
-    // Live Feed UI Helper
-    function addLogToScreen(code) {
+    function addLogToScreen(msg, color) {
         const logBox = document.getElementById("logBox");
-        
-        // Pehli baar me placeholder hatane ke liye
-        if(logBox.innerHTML.includes("Scanned items will appear")) {
-            logBox.innerHTML = "";
-        }
-
-        const newEntry = document.createElement("div");
-        newEntry.className = "log-entry";
-        newEntry.innerText = `[${new Date().toLocaleTimeString()}] 🚀 Scanned: ${code}`;
-        
-        // Naya scan sabse upar dikhane ke liye prepend kiya
-        logBox.insertBefore(newEntry, logBox.firstChild); 
+        if(logBox.innerHTML.includes("History will appear")) logBox.innerHTML = "";
+        const entry = document.createElement("div");
+        entry.className = "log-entry";
+        entry.style.color = color;
+        entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logBox.insertBefore(entry, logBox.firstChild);
     }
 
-    // Auto Start Engine
+    const html5QrCode = new Html5Qrcode("reader");
     window.addEventListener('DOMContentLoaded', () => {
-        html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            qrCodeSuccessCallback,
-            qrCodeErrorCallback
-        ).catch(err => console.error("Camera Initialisation Error:", err));
+        html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: (w, h) => ({ width: w * 0.9, height: h * 0.4 }) }, qrCodeSuccessCallback, () => {});
     });
 </script>
-
 </body>
 </html>
