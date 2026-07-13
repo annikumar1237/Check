@@ -3,258 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ Master Barcode Scanner (IN/OUT)</title>
-    
-    <!-- Fast QR/Barcode library CDN -->
+    <title>⚡ Super-Fast Live Status Barcode Scanner</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-            text-align: center;
-            padding: 20px;
+            background-color: #0f172a; color: #f8fafc; text-align: center; padding: 20px;
         }
         .container {
-            max-width: 500px;
-            margin: 0 auto;
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
+            max-width: 500px; margin: 0 auto; background: #1e293b; padding: 20px; border-radius: 16px;
         }
-        
-        /* Toggle Switch Tabs */
-        .tab-container {
-            display: flex;
-            background: #0f172a;
-            padding: 5px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
+        .tab-container { display: flex; background: #0f172a; padding: 5px; border-radius: 10px; margin-bottom: 20px; }
         .tab-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: transparent;
-            color: #64748b;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            flex: 1; padding: 12px; border: none; border-radius: 8px; background: transparent;
+            color: #64748b; font-size: 1rem; font-weight: bold; cursor: pointer;
         }
+        .mode-in .tab-btn.active { background: #38bdf8; color: #0f172a; }
+        .mode-out .tab-btn.active { background: #f97316; color: #ffffff; }
         
-        /* IN Active Mode Style */
-        .mode-in .tab-btn.active {
-            background: #38bdf8;
-            color: #0f172a;
-            box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3);
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #0f172a; margin-bottom: 15px; }
+        
+        /* 🔔 LIVE STATUS POPUP BANNER */
+        .status-banner {
+            padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; font-size: 0.95rem; display: none;
         }
-        .mode-in #reader {
-            border: 2px dashed #38bdf8;
-        }
-        .mode-in .log-entry {
-            color: #4ade80;
-        }
+        .status-success { background-color: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
+        .status-warn { background-color: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+        .status-error { background-color: rgba(248, 113, 113, 0.2); color: #f87171; border: 1px solid #f87171; }
 
-        /* OUT Active Mode Style */
-        .mode-out .tab-btn.active {
-            background: #f97316;
-            color: #ffffff;
-            box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3);
-        }
-        .mode-out #reader {
-            border: 2px dashed #f97316;
-        }
-        .mode-out .log-entry {
-            color: #f87171;
-        }
-
-        h2 {
-            margin-bottom: 5px;
-            transition: color 0.3s;
-        }
-        .mode-in h2 { color: #38bdf8; }
-        .mode-out h2 { color: #f97316; }
-
-        p {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            margin-bottom: 20px;
-        }
-        #reader {
-            width: 100%;
-            border-radius: 12px;
-            overflow: hidden;
-            background: #0f172a;
-            transition: border 0.3s;
-        }
         .log-box {
-            margin-top: 20px;
-            background: #0f172a;
-            border-radius: 8px;
-            padding: 10px;
-            max-height: 150px;
-            overflow-y: auto;
-            text-align: left;
-            font-family: monospace;
-            font-size: 0.85rem;
+            background: #0f172a; border-radius: 8px; padding: 10px; max-height: 180px; overflow-y: auto; text-align: left; font-family: monospace;
         }
-        .log-entry {
-            padding: 6px 10px;
-            border-bottom: 1px solid #1e293b;
-        }
+        .log-entry { padding: 6px 10px; border-bottom: 1px solid #1e293b; font-size: 0.85rem; }
     </style>
 </head>
-<body class="mode-in" id="mainBody"> <!-- Default Mode IN -->
+<body class="mode-in" id="mainBody">
 
 <div class="container">
-    
-    <!-- Mode Switcher Tabs -->
     <div class="tab-container">
         <button class="tab-btn active" id="btnIn" onclick="switchMode('IN')">📥 IN MODE</button>
         <button class="tab-btn" id="btnOut" onclick="switchMode('OUT')">📤 OUT MODE</button>
     </div>
 
-    <h2 id="scannerTitle">📥 IN SCANNER</h2>
-    <p id="scannerDesc">Entry karne ke liye scan karein (Data E/F ya G/H me jayega)</p>
-    
-    <!-- Camera Window -->
+    <!-- 🔔 Live Server Response Banner -->
+    <div id="statusBanner" class="status-banner">Scanning...</div>
+
     <div id="reader"></div>
     
-    <!-- Scanned History -->
     <div class="log-box" id="logBox">
-        <div style="color: #64748b; text-align:center; padding: 10px;">Scanned items will appear here instantly...</div>
+        <div style="color: #64748b; text-align:center; padding: 10px;">History will appear here...</div>
     </div>
 </div>
 
 <script>
-    // ⚠️ APNI WEB APP URL YAHA DAALEIN
+    // ⚠️ APNI DEPLOYED URL YAHA PASTE KAREIN
     const scriptUrl = "https://script.google.com/macros/s/AKfycbxIjzy8BFpHRsoBz4vKnResTi5l35CLk4HIKocLkhVNh1tWxoXSMMbbZFxpfALYJ7ce/exec";
 
-    let currentMode = "IN"; // Default mode
-    const scannedCache = new Map();
-    const COOLDOWN_TIME = 3000; 
+    let currentMode = "IN";
+    let isProcessing = false;
+    
+    // 🧠 LOCAL MEMORY DATABASE (Phone ke andar hi record track karne ke liye)
+    const localDatabase = new Map(); 
 
-    // Function to Switch Modes (IN / OUT)
     function switchMode(mode) {
         currentMode = mode;
-        const body = document.getElementById("mainBody");
-        const title = document.getElementById("scannerTitle");
-        const desc = document.getElementById("scannerDesc");
-        const btnIn = document.getElementById("btnIn");
-        const btnOut = document.getElementById("btnOut");
-
-        if (mode === "IN") {
-            body.className = "mode-in";
-            title.innerText = "📥 IN SCANNER";
-            desc.innerText = "Entry karne ke liye scan karein (Data E/F ya G/H me jayega)";
-            btnIn.classList.add("active");
-            btnOut.classList.remove("active");
-        } else {
-            body.className = "mode-out";
-            title.innerText = "📤 OUT SCANNER";
-            desc.innerText = "Exit karne ke liye scan karein (Data I aur J me jayega)";
-            btnOut.classList.add("active");
-            btnIn.classList.remove("active");
-        }
+        document.getElementById("mainBody").className = mode === "IN" ? "mode-in" : "mode-out";
+        document.getElementById("btnIn").classList.toggle("active", mode === "IN");
+        document.getElementById("btnOut").classList.toggle("active", mode === "OUT");
     }
 
-    // Fast Beep Sound
-    function playBeep() {
+    function showStatus(text, type) {
+        const banner = document.getElementById("statusBanner");
+        banner.innerText = text;
+        banner.className = "status-banner " + (type === "success" ? "status-success" : type === "warn" ? "status-warn" : "status-error");
+        banner.style.display = "block";
+    }
+
+    function playBeep(freq) {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
-            // IN me high pitch beep, OUT me thoda heavy pitch beep
-            osc.frequency.setValueAtTime(currentMode === "IN" ? 1100 : 800, ctx.currentTime); 
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
             osc.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.08); 
+            osc.start(); osc.stop(ctx.currentTime + 0.12);
         } catch (e) {}
     }
 
-    const html5QrCode = new Html5Qrcode("reader");
-    
-    const config = { 
-        fps: 30, 
-        qrbox: (w, h) => ({ width: w * 0.9, height: h * 0.4 }), 
-        formatsToSupport: [ 
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.CODE_128
-        ]
-    };
-
     const qrCodeSuccessCallback = (decodedText) => {
-        const currentTime = Date.now();
+        if (isProcessing) return; 
+        isProcessing = true;
+
+        const lastStatus = localDatabase.get(decodedText);
+
+        // ⚡ INSTANT CHECK (Bina network delay ke phone me hi turant check)
+        if (currentMode === "IN" && lastStatus === "IN") {
+            showStatus(`⚠️ Already IN: ${decodedText}`, "warn");
+            playBeep(400); 
+            addLogToScreen(`⚠️ Already IN (Local Cache): ${decodedText}`, "#f59e0b");
+            sendDataToGoogleSheet(decodedText); // Background sync
+            return;
+        } 
         
-        // Cooldown Check
-        if (scannedCache.has(decodedText) && (currentTime - scannedCache.get(decodedText) < COOLDOWN_TIME)) {
-            return; 
+        if (currentMode === "OUT" && lastStatus === "OUT") {
+            showStatus(`⚠️ Already OUT: ${decodedText}`, "warn");
+            playBeep(400); 
+            addLogToScreen(`⚠️ Already OUT (Local Cache): ${decodedText}`, "#f59e0b");
+            sendDataToGoogleSheet(decodedText); // Background sync
+            return;
         }
 
-        scannedCache.set(decodedText, currentTime);
-
-        playBeep();
-        if (navigator.vibrate) navigator.vibrate(70); 
-
-        addLogToScreen(decodedText);
-        sendDataInBackground(decodedText);
+        // Agar pehli baar scan ho rha h ya status alag h, toh network verify chalao
+        showStatus("Verifying with Google Sheet...", "warn");
+        sendDataToGoogleSheet(decodedText);
     };
 
-    function sendDataInBackground(barcodeData) {
-        // Current selected mode ("IN" ya "OUT") payload ke sath bhejna
-        const payload = {
-            barcode: barcodeData,
-            type: currentMode,
-            timestamp: new Date().toLocaleString()
-        };
-
+    // Google sheet se baatein karna aur local memory sync karna
+    function sendDataToGoogleSheet(barcodeData) {
         fetch(scriptUrl, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).catch(err => console.error("Error sending data:", err));
+            body: JSON.stringify({ barcode: barcodeData, type: currentMode })
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (response.status === "success") {
+                if (response.message.includes("Already Scanned - IN")) {
+                    localDatabase.set(barcodeData, "IN"); // Memory me update kara
+                    showStatus(`⚠️ Already IN: ${barcodeData}`, "warn");
+                    playBeep(400); 
+                    addLogToScreen(`⚠️ Already IN: ${barcodeData}`, "#f59e0b");
+                } 
+                else if (response.message.includes("Already Scanned - OUT")) {
+                    localDatabase.set(barcodeData, "OUT"); // Memory me update kara
+                    showStatus(`⚠️ Already OUT: ${barcodeData}`, "warn");
+                    playBeep(400); 
+                    addLogToScreen(`⚠️ Already OUT: ${barcodeData}`, "#f59e0b");
+                }
+                else {
+                    // Fresh Success Entry
+                    localDatabase.set(barcodeData, currentMode); // Memory update
+                    showStatus(`✅ Success: ${barcodeData}`, "success");
+                    playBeep(1000); 
+                    addLogToScreen(`✅ ${currentMode}: ${barcodeData}`, currentMode === "IN" ? "#4ade80" : "#f97316");
+                }
+            } else {
+                // Rejected (Bina IN ke OUT lagane par)
+                showStatus(`❌ ${response.message}`, "error");
+                playBeep(250); 
+                addLogToScreen(`❌ Failed: ${response.message}`, "#f87171");
+            }
+            // Cooldown delay taaki ek scan do baar na khinche turant
+            setTimeout(() => { isProcessing = false; }, 1200); 
+        })
+        .catch(err => {
+            showStatus("❌ Network Error!", "error");
+            console.error(err);
+            isProcessing = false;
+        });
     }
 
-    function addLogToScreen(code) {
+    function addLogToScreen(msg, color) {
         const logBox = document.getElementById("logBox");
+        if(logBox.innerHTML.includes("History will appear")) logBox.innerHTML = "";
         
-        if(logBox.innerHTML.includes("Scanned items will appear")) {
-            logBox.innerHTML = "";
-        }
+        // Dubara wahi message list me double na dikhe usko check karne ke liye
+        if(logBox.firstChild && logBox.firstChild.innerText.includes(msg)) return;
 
-        const newEntry = document.createElement("div");
-        newEntry.className = "log-entry";
-        
-        // Log text badalna mode ke hisab se
-        if (currentMode === "IN") {
-            newEntry.innerText = `[${new Date().toLocaleTimeString()}] 📥 IN: ${code}`;
-        } else {
-            newEntry.innerText = `[${new Date().toLocaleTimeString()}] 📤 OUT: ${code}`;
-        }
-        
-        logBox.insertBefore(newEntry, logBox.firstChild); 
+        const entry = document.createElement("div");
+        entry.className = "log-entry";
+        entry.style.color = color;
+        entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logBox.insertBefore(entry, logBox.firstChild);
     }
 
+    const html5QrCode = new Html5Qrcode("reader");
     window.addEventListener('DOMContentLoaded', () => {
-        html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            qrCodeSuccessCallback,
-            () => {}
-        ).catch(err => console.error("Camera Error:", err));
+        html5QrCode.start({ facingMode: "environment" }, { fps: 25, qrbox: (w, h) => ({ width: w * 0.9, height: h * 0.4 }) }, qrCodeSuccessCallback, () => {});
     });
 </script>
-
 </body>
 </html>
