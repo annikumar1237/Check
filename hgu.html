@@ -102,24 +102,31 @@
         .then(res => res.json())
         .then(response => {
             if (response.status === "success") {
-                if (response.message.includes("Already Scanned")) {
-                    // ⚠️ Agar 4 din purana ya pehle se IN tha
+                if (response.message.includes("Already Scanned - IN")) {
+                    // ⚠️ Agar IN mode me pehle se IN tha
                     showStatus(`⚠️ ${decodedText}: Already IN! (Overwritten)`, "warn");
-                    playBeep(400); // Heavy alert sound
+                    playBeep(400); // Heavy warning sound
                     addLogToScreen(`⚠️ Already IN (Updated): ${decodedText}`, "#f59e0b");
-                } else {
-                    // Fresh Entry
+                } 
+                else if (response.message.includes("Already Scanned - OUT")) {
+                    // ⚠️ NEW: Agar OUT mode me pehle se OUT tha
+                    showStatus(`⚠️ ${decodedText}: Already OUT! (Overwritten)`, "warn");
+                    playBeep(400); // Heavy warning sound
+                    addLogToScreen(`⚠️ Already OUT (Updated): ${decodedText}`, "#f59e0b");
+                }
+                else {
+                    // Fresh Entry (Pehli baar IN ya OUT)
                     showStatus(`✅ ${decodedText}: Success!`, "success");
                     playBeep(1000); 
                     addLogToScreen(`✅ ${currentMode}: ${decodedText}`, currentMode === "IN" ? "#4ade80" : "#f97316");
                 }
             } else {
-                // Rejected or Not in list
+                // Rejected (Bina IN ke OUT) ya Not in list
                 showStatus(`❌ ${response.message}`, "error");
                 playBeep(250); 
                 addLogToScreen(`❌ Failed: ${response.message}`, "#f87171");
             }
-            setTimeout(() => { isProcessing = false; }, 2000); // 2 Seconds ka delay taaki camera turant wapas lock na ho
+            setTimeout(() => { isProcessing = false; }, 2000); // 2 Seconds ka delay taaki camera lock na ho jaye
         })
         .catch(err => {
             showStatus("❌ Network Error!", "error");
