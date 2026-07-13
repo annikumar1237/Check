@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ Smart Unique Barcode Scanner</title>
+    <title>⚡ One-Time Multi Barcode Scanner</title>
     
-    <!-- Fast QR/Barcode library CDN -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Zxing Multi-Barcode Library CDN -->
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,7 +18,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 500px;
+            max-width: 600px;
             margin: 0 auto;
             background: #1e293b;
             padding: 20px;
@@ -28,98 +28,56 @@
         h2 { color: #38bdf8; margin-bottom: 5px; }
         p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 20px; }
         
-        #reader {
+        /* Video wrapper */
+        .video-container {
+            position: relative;
             width: 100%;
-            border: 2px dashed #38bdf8;
             border-radius: 12px;
             overflow: hidden;
             background: #0f172a;
+            border: 2px dashed #38bdf8;
         }
-        
-        /* Confirmation Box */
-        .confirm-box {
-            display: none;
+        video { width: 100%; height: auto; display: block; }
+
+        .log-box {
             margin-top: 20px;
-            background: #1e293b;
-            border: 2px solid #22c55e;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .scanned-value {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: #4ade80;
-            margin: 10px 0 20px 0;
-            word-break: break-all;
             background: #0f172a;
-            padding: 10px;
             border-radius: 8px;
-        }
-        
-        .btn {
-            width: 100%;
             padding: 15px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.85rem;
         }
-        .btn-ok { background-color: #22c55e; color: white; }
-        .btn-ok:active { background-color: #16a34a; }
-        .btn-cancel { background-color: #ef4444; color: white; font-size: 1rem; padding: 10px; }
-        
-        /* Count Badge */
-        .count-badge {
-            margin-top: 15px;
-            font-size: 0.9rem;
-            color: #a7f3d0;
-            background: #064e3b;
-            padding: 6px 12px;
-            display: inline-block;
-            border-radius: 20px;
+        .log-entry {
+            padding: 6px 10px;
+            border-bottom: 1px solid #1e293b;
+            color: #4ade80;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>⚡ Unique Barcode Scanner</h2>
-    <p>Jo ek baar successfully scan ho gaya, woh dobara scan nahi hoga</p>
+    <h2>⚡ One-Time Multi-Scanner</h2>
+    <p>Saare barcodes ek saath camera ke saamne laayein, yeh ek baar mein sab utha lega!</p>
     
-    <div id="reader"></div>
+    <div class="video-container">
+        <video id="video" autoplay muted playsinline></video>
+    </div>
     
-    <div class="count-badge" id="countBadge">Unique Scanned: 0</div>
-    
-    <!-- Confirmation Popup -->
-    <div class="confirm-box" id="confirmBox">
-        <div style="color: #94a3b8; font-size: 0.9rem;">New Barcode Found:</div>
-        <div class="scanned-value" id="scannedValue">---</div>
-        
-        <button class="btn btn-ok" id="btnSend">✓ OK (Send to Sheet)</button>
-        <button class="btn btn-cancel" id="btnCancel">❌ Cancel / Rescan</button>
+    <div class="log-box" id="logBox">
+        <div style="color: #64748b; text-align:center;">Camera starting... Hold multiple barcodes together.</div>
     </div>
 </div>
 
 <script>
     const scriptUrl = "https://script.google.com/macros/s/AKfycbxIjzy8BFpHRsoBz4vKnResTi5l35CLk4HIKocLkhVNh1tWxoXSMMbbZFxpfALYJ7ce/exec";
     
-    let currentBarcode = ""; 
-    const html5QrCode = new Html5Qrcode("reader");
-    
-    // 🔴 PERMANENT MEMORY: Jo scan ho chuke hain unki list yahan rahegi
-    const permanentHistory = new Set(); 
-    
-    const config = { 
-        fps: 25, 
-        qrbox: (w, h) => ({ width: w * 0.85, height: h * 0.45 }),
-        formatsToSupport: [ 
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.CODE_128
-        ]
-    };
+    // Duplicate entries se bachne ke liye cooldown registry
+    const scannedCache = new Map();
+    const COOLDOWN_TIME = 5000; // Ek baar scan hone ke baad 5 second tak same code skip hoga
 
     function playBeep() {
         try {
@@ -131,87 +89,82 @@
         } catch (e) {}
     }
 
-    // 1. CAMERA SCAN FUNCTION
-    const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-        // 🔥 CRITICAL CHECK: Agar yeh barcode pehle se history me hai, toh chupchaap ignore maaro, camera chalu rahega
-        if (permanentHistory.has(decodedText)) {
-            return; 
-        }
+    // Zxing MultiFormat Reader Initialize kar rahe hain
+    const codeReader = new ZXing.BrowserMultiFormatReader();
 
-        // Agar bilkul naya barcode hai, toh hi camera ko pause karo confirmation ke liye
-        stopScanner();
-        
-        playBeep();
-        if (navigator.vibrate) navigator.vibrate(100);
+    window.addEventListener('DOMContentLoaded', () => {
+        const videoElement = document.getElementById('video');
+        const logBox = document.getElementById('logBox');
 
-        currentBarcode = decodedText;
-        document.getElementById("scannedValue").innerText = decodedText;
-        document.getElementById("confirmBox").style.display = "block";
-    };
+        // Back camera select karne ke liye list nikal rahe hain
+        codeReader.listVideoInputDevices()
+            .then((videoInputDevices) => {
+                // Back camera choose karne ka try karte hain, nahi toh default first device
+                let selectedDeviceId = videoInputDevices[0].deviceId;
+                for (let device of videoInputDevices) {
+                    if (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment')) {
+                        selectedDeviceId = device.deviceId;
+                        break;
+                    }
+                }
 
-    const qrCodeErrorCallback = (err) => { /* Ignore frame errors */ };
+                logBox.innerHTML = `<div style="color: #64748b; text-align:center;">Scanner Ready. Scanning continuously...</div>`;
 
-    // 2. OK BUTTON CLICKED
-    document.getElementById("btnSend").addEventListener("click", () => {
-        if (!currentBarcode) return;
+                // Multi-barcode decode loop start
+                // decodeFromVideoDevice har frame me jitne barcodes milenge, unki array return karega
+                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                    if (result) {
+                        // Zxing browser library me multiple results handle karne ke liye hum check karte hain
+                        const currentTime = Date.now();
+                        const barcodeData = result.text;
 
-        const btnSend = document.getElementById("btnSend");
-        btnSend.innerText = "Sending...";
-        btnSend.disabled = true;
+                        // Cache duplicate check
+                        if (scannedCache.has(barcodeData) && (currentTime - scannedCache.get(barcodeData) < COOLDOWN_TIME)) {
+                            return; // Agar abhi scan kiya tha toh skip karo
+                        }
 
-        const payload = {
-            barcode: currentBarcode,
-            timestamp: new Date().toLocaleString()
-        };
+                        // Lock for cooldown
+                        scannedCache.set(barcodeData, currentTime);
 
+                        // Feedback
+                        playBeep();
+                        if (navigator.vibrate) navigator.vibrate(70);
+
+                        // UI & Background send
+                        addLogToScreen(barcodeData);
+                        sendDataToSheet(barcodeData);
+                    }
+                });
+            })
+            .catch((err) => {
+                console.error("Camera setup error:", err);
+                logBox.innerHTML = `<div style="color: #ef4444; text-align:center;">Camera Error: ${err.message}</div>`;
+            });
+    });
+
+    // Background upload function
+    function sendDataToSheet(barcodeData) {
         fetch(scriptUrl, {
             method: "POST",
             mode: "no-cors",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        })
-        .then(() => {
-            // 🔥 SUCCESS: Pehle memory me add karo taaki ab dobara scan na ho sake
-            permanentHistory.add(currentBarcode);
-            
-            // UI par counter update karo
-            document.getElementById("countBadge").innerText = `Unique Scanned: ${permanentHistory.size}`;
-            
-            resetScannerUI();
-        })
-        .catch((error) => {
-            console.error("Error:", error);
-            alert("❌ Network Error! Save nahi ho paya.");
-            resetScannerUI();
-        });
-    });
-
-    // 3. CANCEL CLICKED
-    document.getElementById("btnCancel").addEventListener("click", () => {
-        resetScannerUI();
-    });
-
-    function resetScannerUI() {
-        currentBarcode = "";
-        document.getElementById("confirmBox").style.display = "none";
-        
-        const btnSend = document.getElementById("btnSend");
-        btnSend.innerText = "✓ OK (Send to Sheet)";
-        btnSend.disabled = false;
-
-        startScanner();
+            body: JSON.stringify({
+                barcode: barcodeData,
+                timestamp: new Date().toLocaleString()
+            })
+        }).catch(err => console.error("Sheet send error:", err));
     }
 
-    function startScanner() {
-        html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            qrCodeSuccessCallback,
-            qrCodeErrorCallback
-        ).catch(err => console.error("Camera Error:", err));
-    }
+    // UI screen update
+    function addLogToScreen(code) {
+        const logBox = document.getElementById("logBox");
+        if(logBox.innerHTML.includes("Scanner Ready")) logBox.innerHTML = "";
 
-    window.addEventListener('DOMContentLoaded', startScanner);
+        const newEntry = document.createElement("div");
+        newEntry.className = "log-entry";
+        newEntry.innerText = `[${new Date().toLocaleTimeString()}] ✅ Captured: ${code}`;
+        logBox.insertBefore(newEntry, logBox.firstChild);
+    }
 </script>
 
 </body>
