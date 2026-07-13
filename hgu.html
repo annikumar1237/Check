@@ -89,12 +89,11 @@
     }
 
     const qrCodeSuccessCallback = (decodedText) => {
-        if (isProcessing) return; // Ek baar me ek hi scan process hoga
+        if (isProcessing) return; 
         isProcessing = true;
 
         showStatus("Checking Sheet Status...", "warn");
 
-        // Google Sheet ko data bhejna aur live response lena
         fetch(scriptUrl, {
             method: "POST",
             body: JSON.stringify({ barcode: decodedText, type: currentMode })
@@ -103,30 +102,30 @@
         .then(response => {
             if (response.status === "success") {
                 if (response.message.includes("Already Scanned - IN")) {
-                    // ⚠️ Agar IN mode me pehle se IN tha
-                    showStatus(`⚠️ ${decodedText}: Already IN! (Overwritten)`, "warn");
-                    playBeep(400); // Heavy warning sound
-                    addLogToScreen(`⚠️ Already IN (Updated): ${decodedText}`, "#f59e0b");
+                    // 👉 IN mode me pehle se IN hone par ye dikhega
+                    showStatus(`⚠️ Already IN: ${decodedText}`, "warn");
+                    playBeep(400); 
+                    addLogToScreen(`⚠️ Already IN: ${decodedText}`, "#f59e0b");
                 } 
                 else if (response.message.includes("Already Scanned - OUT")) {
-                    // ⚠️ NEW: Agar OUT mode me pehle se OUT tha
-                    showStatus(`⚠️ ${decodedText}: Already OUT! (Overwritten)`, "warn");
-                    playBeep(400); // Heavy warning sound
-                    addLogToScreen(`⚠️ Already OUT (Updated): ${decodedText}`, "#f59e0b");
+                    // 👉 OUT mode me pehle se OUT hone par ye dikhega
+                    showStatus(`⚠️ Already OUT: ${decodedText}`, "warn");
+                    playBeep(400); 
+                    addLogToScreen(`⚠️ Already OUT: ${decodedText}`, "#f59e0b");
                 }
                 else {
-                    // Fresh Entry (Pehli baar IN ya OUT)
-                    showStatus(`✅ ${decodedText}: Success!`, "success");
+                    // Nayi fresh entry hone par
+                    showStatus(`✅ Success: ${decodedText}`, "success");
                     playBeep(1000); 
                     addLogToScreen(`✅ ${currentMode}: ${decodedText}`, currentMode === "IN" ? "#4ade80" : "#f97316");
                 }
             } else {
-                // Rejected (Bina IN ke OUT) ya Not in list
+                // Bina IN ke OUT lagane par ya barcode galat hone par
                 showStatus(`❌ ${response.message}`, "error");
                 playBeep(250); 
                 addLogToScreen(`❌ Failed: ${response.message}`, "#f87171");
             }
-            setTimeout(() => { isProcessing = false; }, 2000); // 2 Seconds ka delay taaki camera lock na ho jaye
+            setTimeout(() => { isProcessing = false; }, 2000); 
         })
         .catch(err => {
             showStatus("❌ Network Error!", "error");
