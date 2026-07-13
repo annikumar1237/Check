@@ -3,76 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ IN - Continuous Barcode Scanner</title>
+    <title>⚡ Master Barcode Scanner (IN/OUT)</title>
+    
+    <!-- Fast QR/Barcode library CDN -->
     <script src="https://unpkg.com/html5-qrcode"></script>
+
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; text-align: center; padding: 20px; }
-        .container { max-width: 500px; margin: 0 auto; background: #1e293b; padding: 20px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
-        h2 { color: #38bdf8; margin-bottom: 5px; }
-        p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 20px; }
-        #reader { width: 100%; border: 2px dashed #38bdf8; border-radius: 12px; overflow: hidden; background: #0f172a; }
-        .log-box { margin-top: 20px; background: #0f172a; border-radius: 8px; padding: 10px; max-height: 150px; overflow-y: auto; text-align: left; font-family: monospace; font-size: 0.85rem; }
-        .log-entry { padding: 6px 10px; border-bottom: 1px solid #1e293b; color: #4ade80; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        /* Toggle Switch Tabs */
+        .tab-container {
+            display: flex;
+            background: #0f172a;
+            padding: 5px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: #64748b;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        /* IN Active Mode Style */
+        .mode-in .tab-btn.active {
+            background: #38bdf8;
+            color: #0f172a;
+            box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3);
+        }
+        .mode-in #reader {
+            border: 2px dashed #38bdf8;
+        }
+        .mode-in .log-entry {
+            color: #4ade80;
+        }
+
+        /* OUT Active Mode Style */
+        .mode-out .tab-btn.active {
+            background: #f97316;
+            color: #ffffff;
+            box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3);
+        }
+        .mode-out #reader {
+            border: 2px dashed #f97316;
+        }
+        .mode-out .log-entry {
+            color: #f87171;
+        }
+
+        h2 {
+            margin-bottom: 5px;
+            transition: color 0.3s;
+        }
+        .mode-in h2 { color: #38bdf8; }
+        .mode-out h2 { color: #f97316; }
+
+        p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+        #reader {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #0f172a;
+            transition: border 0.3s;
+        }
+        .log-box {
+            margin-top: 20px;
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .log-entry {
+            padding: 6px 10px;
+            border-bottom: 1px solid #1e293b;
+        }
     </style>
 </head>
-<body>
+<body class="mode-in" id="mainBody"> <!-- Default Mode IN -->
+
 <div class="container">
-    <h2>📥 IN SCANNER</h2>
-    <p>Entry karne ke liye scan karein (Data E/F ya G/H me jayega)</p>
+    
+    <!-- Mode Switcher Tabs -->
+    <div class="tab-container">
+        <button class="tab-btn active" id="btnIn" onclick="switchMode('IN')">📥 IN MODE</button>
+        <button class="tab-btn" id="btnOut" onclick="switchMode('OUT')">📤 OUT MODE</button>
+    </div>
+
+    <h2 id="scannerTitle">📥 IN SCANNER</h2>
+    <p id="scannerDesc">Entry karne ke liye scan karein (Data E/F ya G/H me jayega)</p>
+    
+    <!-- Camera Window -->
     <div id="reader"></div>
+    
+    <!-- Scanned History -->
     <div class="log-box" id="logBox">
         <div style="color: #64748b; text-align:center; padding: 10px;">Scanned items will appear here instantly...</div>
     </div>
 </div>
-<script>
-    // ⚠️ YAHAN APNI WEB APP URL DAALEIN
-    const scriptUrl = "https://script.google.com/macros/s/AKfycbxIjzy8BFpHRsoBz4vKnResTi5l35CLk4HIKocLkhVNh1tWxoXSMMbbZFxpfALYJ7ce/exec"; 
-    const scannedCache = new Map();
-    const COOLDOWN_TIME = 3000;
 
+<script>
+    // ⚠️ APNI WEB APP URL YAHA DAALEIN
+    const scriptUrl = "https://script.google.com/macros/s/AKfycbxIjzy8BFpHRsoBz4vKnResTi5l35CLk4HIKocLkhVNh1tWxoXSMMbbZFxpfALYJ7ce/exec";
+
+    let currentMode = "IN"; // Default mode
+    const scannedCache = new Map();
+    const COOLDOWN_TIME = 3000; 
+
+    // Function to Switch Modes (IN / OUT)
+    function switchMode(mode) {
+        currentMode = mode;
+        const body = document.getElementById("mainBody");
+        const title = document.getElementById("scannerTitle");
+        const desc = document.getElementById("scannerDesc");
+        const btnIn = document.getElementById("btnIn");
+        const btnOut = document.getElementById("btnOut");
+
+        if (mode === "IN") {
+            body.className = "mode-in";
+            title.innerText = "📥 IN SCANNER";
+            desc.innerText = "Entry karne ke liye scan karein (Data E/F ya G/H me jayega)";
+            btnIn.classList.add("active");
+            btnOut.classList.remove("active");
+        } else {
+            body.className = "mode-out";
+            title.innerText = "📤 OUT SCANNER";
+            desc.innerText = "Exit karne ke liye scan karein (Data I aur J me jayega)";
+            btnOut.classList.add("active");
+            btnIn.classList.remove("active");
+        }
+    }
+
+    // Fast Beep Sound
     function playBeep() {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
-            osc.frequency.setValueAtTime(1000, ctx.currentTime);
+            // IN me high pitch beep, OUT me thoda heavy pitch beep
+            osc.frequency.setValueAtTime(currentMode === "IN" ? 1100 : 800, ctx.currentTime); 
             osc.connect(ctx.destination);
-            osc.start(); osc.stop(ctx.currentTime + 0.08);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08); 
         } catch (e) {}
     }
 
     const html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 30, qrbox: (w, h) => ({ width: w * 0.9, height: h * 0.4 }), formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128] };
+    
+    const config = { 
+        fps: 30, 
+        qrbox: (w, h) => ({ width: w * 0.9, height: h * 0.4 }), 
+        formatsToSupport: [ 
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.CODE_128
+        ]
+    };
 
     const qrCodeSuccessCallback = (decodedText) => {
         const currentTime = Date.now();
-        if (scannedCache.has(decodedText) && (currentTime - scannedCache.get(decodedText) < COOLDOWN_TIME)) return;
+        
+        // Cooldown Check
+        if (scannedCache.has(decodedText) && (currentTime - scannedCache.get(decodedText) < COOLDOWN_TIME)) {
+            return; 
+        }
+
         scannedCache.set(decodedText, currentTime);
+
         playBeep();
         if (navigator.vibrate) navigator.vibrate(70); 
+
         addLogToScreen(decodedText);
         sendDataInBackground(decodedText);
     };
 
     function sendDataInBackground(barcodeData) {
-        // Yahan se hum type: "IN" bhej rahe hain
-        const payload = { barcode: barcodeData, type: "IN", timestamp: new Date().toLocaleString() };
-        fetch(scriptUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
-        .catch(err => console.error(err));
+        // Current selected mode ("IN" ya "OUT") payload ke sath bhejna
+        const payload = {
+            barcode: barcodeData,
+            type: currentMode,
+            timestamp: new Date().toLocaleString()
+        };
+
+        fetch(scriptUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).catch(err => console.error("Error sending data:", err));
     }
 
     function addLogToScreen(code) {
         const logBox = document.getElementById("logBox");
-        if(logBox.innerHTML.includes("Scanned items will appear")) logBox.innerHTML = "";
+        
+        if(logBox.innerHTML.includes("Scanned items will appear")) {
+            logBox.innerHTML = "";
+        }
+
         const newEntry = document.createElement("div");
         newEntry.className = "log-entry";
-        newEntry.innerText = `[${new Date().toLocaleTimeString()}] 📥 IN: ${code}`;
+        
+        // Log text badalna mode ke hisab se
+        if (currentMode === "IN") {
+            newEntry.innerText = `[${new Date().toLocaleTimeString()}] 📥 IN: ${code}`;
+        } else {
+            newEntry.innerText = `[${new Date().toLocaleTimeString()}] 📤 OUT: ${code}`;
+        }
+        
         logBox.insertBefore(newEntry, logBox.firstChild); 
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback, () => {}).catch(err => console.error(err));
+        html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            qrCodeSuccessCallback,
+            () => {}
+        ).catch(err => console.error("Camera Error:", err));
     });
 </script>
+
 </body>
 </html>
